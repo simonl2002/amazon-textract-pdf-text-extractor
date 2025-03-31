@@ -75,6 +75,7 @@ class SimpleAsyncWorkflow(Stack):
             "LambdaTextractPostProcessing",
             code=lambda_.DockerImageCode.from_image_asset(
                 os.path.join(script_location, '../lambda/textractpostprocessor')),
+            architecture=lambda_.Architecture.ARM_64,
             memory_size=2048,
             timeout=Duration.minutes(15),
             environment={"SKIP_PAGES": "CONTENTS,TABLE OF CONTENTS,FOREWORDS, ANNEXES,Table of Contents,ACRONYMS, ABBREVIATIONS",
@@ -110,6 +111,7 @@ class SimpleAsyncWorkflow(Stack):
             "LambdaStartStepFunctionGeneric",
             code=lambda_.DockerImageCode.from_image_asset(
                 os.path.join(script_location, '../lambda/startstepfunction')),
+            architecture=lambda_.Architecture.ARM_64,
             memory_size=128,
             environment={"STATE_MACHINE_ARN": state_machine.state_machine_arn})
 
