@@ -15,7 +15,7 @@ Resources:
     Properties:
       PackageType: Image
       Architectures:
-        - x86_64
+        - arm64
       Environment:
         Variables:
           STATE_MACHINE_ARN: textract-output

@@ -23,6 +23,7 @@ import boto3
 import re
 import os
 import json
+import s3fs
 from patternDetector import PatternDetector
 from awsUtils import readTextFileFromS3, split_s3_path, getExtractedDataFromS3
 import math
@@ -33,6 +34,7 @@ pattern_detector = PatternDetector()
 noLinesHeader = int(os.environ.get("NO_LINES_HEADER", 5))
 noLinesFooter = int(os.environ.get("NO_LINES_FOOTER", 10))
 filterParaWithWords = int(os.environ.get("FILTER_PARA_WORDS", 10))
+outputBucket = os.environ.get("OUTPUT_BUCKET")
 
 
 def lambda_handler(event, context):
@@ -43,9 +45,13 @@ def lambda_handler(event, context):
     i = 1
     totalPages = event['numberOfPages']
 
+    print("processing textract output in ", textractS3OutputPath)
+    bucketName, prefixPath = split_s3_path(textractS3OutputPath)
+
+    jsonOutputPath = f"s3://{outputBucket}/{prefixPath}"
+    print("JSON output will be written to ", jsonOutputPath)
+
     try:
-        print("processing textract output in ", textractS3OutputPath)
-        bucketName, prefixPath = split_s3_path(textractS3OutputPath)
         filterdHeaderFooter = pattern_detector.identifyHeaderFooterPattern( bucketName, prefixPath, totalPages )
         print("Header/Footer pattern found :", len(filterdHeaderFooter))
         page = 1
@@ -86,6 +92,7 @@ def lambda_handler(event, context):
     print( f"Number of paragraphs extracted : {len(paragraphs)}")
     print( f"Number of filtered paragraphs extracted : {len(filteredParagraphs)}")
     convertToCSVAndSave( f"{textractS3OutputPath}/extracted-text.csv", filteredParagraphs)
+    convertToJsonAndSave( jsonOutputPath, filteredParagraphs)
 
 def findBin( bin ):
     #keep it simple with 3 bins
@@ -217,6 +224,14 @@ def convertToCSVAndSave( textractS3OutputPath, paragraphs ):
     csvdf = pd.DataFrame(paragraphs, columns =['content'])
     csvdf.to_csv(textractS3OutputPath)
 
+def convertToJsonAndSave( s3OutputPath, paragraphs ):
+    s3 = s3fs.S3FileSystem(anon=False)
+    i=0
+    for graph in paragraphs:
+        chunk = {"paragraph": graph}
+        with s3.open(f'{s3OutputPath}/extracted-chunk-{i}.json', 'wb', encoding="utf-8") as f:
+            f.write(bytes(json.dumps(chunk), 'utf-8'))
+        i += 1
 
 def findIncompletePharagraph( paragraphs, line ):
     lenP = len(paragraphs)-1

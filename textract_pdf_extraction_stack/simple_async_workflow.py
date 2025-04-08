@@ -44,7 +44,15 @@ class SimpleAsyncWorkflow(Stack):
                                     "TextractSimpleAsyncWorkflow",
                                     auto_delete_objects=True,
                                     removal_policy=RemovalPolicy.DESTROY)
-        s3_output_bucket = document_bucket.bucket_name
+
+        output_bucket = s3.Bucket(self,
+                                    "TextractSimpleAsyncWorkflowOutput",
+                                    auto_delete_objects=True,
+                                    removal_policy=RemovalPolicy.DESTROY)
+
+        textract_output_bucket = document_bucket.bucket_name
+        postprocess_output_bucket = output_bucket.bucket_name
+
         workflow_name = "SimpleAsyncWorkflow"
 
         decider_task = tcdk.TextractPOCDecider(
@@ -55,7 +63,7 @@ class SimpleAsyncWorkflow(Stack):
         textract_async_task = tcdk.TextractGenericAsyncSfnTask(
             self,
             "TextractAsync",
-            s3_output_bucket=s3_output_bucket,
+            s3_output_bucket=textract_output_bucket,
             s3_temp_output_prefix=s3_temp_output_prefix,
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
             lambda_log_level="DEBUG",
@@ -75,12 +83,14 @@ class SimpleAsyncWorkflow(Stack):
             "LambdaTextractPostProcessing",
             code=lambda_.DockerImageCode.from_image_asset(
                 os.path.join(script_location, '../lambda/textractpostprocessor')),
+            architecture=lambda_.Architecture.ARM_64,
             memory_size=2048,
             timeout=Duration.minutes(15),
             environment={"SKIP_PAGES": "CONTENTS,TABLE OF CONTENTS,FOREWORDS, ANNEXES,Table of Contents,ACRONYMS, ABBREVIATIONS",
                          "NO_LINES_HEADER": "3",
                          "NO_LINES_FOOTER": "10",
-                         "FILTER_PARA_WORDS":"10"
+                         "FILTER_PARA_WORDS":"10",
+                         "OUTPUT_BUCKET": postprocess_output_bucket
                          })
 
         lambda_textract_post_processing_function.add_to_role_policy(
@@ -110,6 +120,7 @@ class SimpleAsyncWorkflow(Stack):
             "LambdaStartStepFunctionGeneric",
             code=lambda_.DockerImageCode.from_image_asset(
                 os.path.join(script_location, '../lambda/startstepfunction')),
+            architecture=lambda_.Architecture.ARM_64,
             memory_size=128,
             environment={"STATE_MACHINE_ARN": state_machine.state_machine_arn})
 
